@@ -1,0 +1,502 @@
+<!doctype html>
+<html>
+	<head>
+		<title>Crime in California</title>
+		<link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.1/dist/leaflet.css" />
+		<script src="https://unpkg.com/leaflet@1.3.1/dist/leaflet.js"></script>
+	    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" type="text/javascript"></script>
+ 	    <script language="javascript" src="menu.js"></script>
+	    <link rel="stylesheet" type="text/css" href="history/dist/leaflet-history.css">
+		<script type="text/javascript" src="history/dist/leaflet-history.js"></script>
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.2/leaflet.draw.css"  />
+	    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.2/leaflet.draw.js"></script>
+	    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@5/turf.min.js"></script>
+		<meta charset="utf-8"/>
+
+	    <style>
+			html, body{
+				margin: 0;
+				padding: 0;
+		        font-family: "Open Sans", sans-serif;
+			}
+			#info{
+				position: fixed;
+				top: 0;
+				left: 0;
+				bottom: 0;
+				width: 25vw;
+				padding: 1em;
+			}
+			#map{
+				position: fixed;
+				top: 0;
+				left: 25vw;
+				bottom: 0;
+				right: 0;
+			}
+			.leaflet-bottom.leaflet-left{
+				width: 100%;
+			}
+			.leaflet-control-container .leaflet-timeline-controls{
+				box-sizing: border-box;
+				width: 100%;
+				margin: 0;
+				margin-bottom: 15px;
+			}
+	       /* Dropdown Button */
+			.dropbtn {
+			    background-color: #3498DB;
+			    color: white;
+			    padding: 8px;
+			    font-size: 12px;
+			    border: none;
+			    cursor: pointer;
+			}
+
+			/* Dropdown button on hover & focus */
+			.dropbtn:hover, .dropbtn:focus {
+			    background-color: #2980B9;
+			}
+
+			/* The container <div> - needed to position the dropdown content */
+			.dropdown {
+			    position: relative;
+			    display: inline-block;
+			}
+
+			/* Dropdown Content (Hidden by Default) */
+			.dropdown-content {
+			    display: none;
+			    position: absolute;
+			    background-color: #f1f1f1;
+			    min-width: 160px;
+			    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+			    z-index: 1;
+			}
+
+			/* Links inside the dropdown */
+			.dropdown-content a {
+			    color: black;
+			    padding: 12px 16px;
+			    text-decoration: none;
+			    display: block;
+			}
+
+			/* Change color of dropdown links on hover */
+			.dropdown-content a:hover {background-color: #ddd}
+
+			/* Show the dropdown menu (use JS to add this class to the .dropdown-content container when the user clicks on the dropdown button) */
+			.show {display:block;} 
+	    </style>
+	</head>
+
+	<body>
+		<div id="info" style="overflow: auto">
+		<h1>California Crime</h1>
+		<div style='align-items: center;'><b>Map Zoom Options:</b><br>
+			<button onclick="zoomToExtent()" class="button">Zoom to Extent</button>
+			<button onclick="zoomToPan()" class="button">Pan</button><br>
+		</div>
+		<br>
+		<div id="panel">
+				<b>Select occurrences</b>
+				<select id="selectMe" class="dropdown"  onchange="ddOption(this)">
+				  <option value="option1" selected>By Crime</option>
+				  <option value="option2">By Area</option>
+				  <option value="option3">By Drawing</option>
+				</select><br><br>
+				<div id="option1" class="group inline-block">
+					Select point from map to see details<br>
+					Incident Number:<div style='display: inline-block;' id='txtIncidentNum'></div><br>
+					Category:<div style='display: inline-block;' id='txtCategory'></div><br>
+					Description:<div style='display: inline-block;' id='txtDesc'></div><br>
+					Weekday:<div style='display: inline-block;' id='txtWeekday'></div><br>
+					Date:<div style='display: inline-block;' id='txtDate'></div><br>
+					Time:<div style='display: inline-block;' id='txtTime'></div><br>
+					District:<div style='display: inline-block;' id='txtDistrict'></div><br>
+					Resolution:<div style='display: inline-block;' id='txtResolution'></div><br>
+					Address:<div style='display: inline-block;' id='txtAddress'></div><br>
+					Lat/Long:<div style='display: inline-block;' id='txtLatLong'></div>
+				</div>
+				<div id="option2" class="group">
+					Select district to see crimes by district<br>
+					<div id='cbcrimes'></div>
+
+				</div>
+				<div id="option3" class="group">
+					Draw on the map using Circle tool to see crimes in a specific area
+					<div id="selectedCrimes">
+						<ul id="listCrimes">
+							
+						</ul>
+					</div>
+
+				</div>
+			</div> 
+		</div>
+		<div id="map"></div>
+
+		<script>
+
+// global defininitions
+var locations = [];
+var details = [];
+var areas = [];
+var locAreas = [];
+
+var map;
+var osmUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+var osmAttrib = 'Map data © <a href="https://openstreetmap.org">OpenStreetMap</a> contributors';
+var osm = new L.tileLayer(osmUrl, {
+    maxZoom: 16,
+    attribution: osmAttrib,
+    noWrap: true
+ });
+
+var pointsLayer = new L.layerGroup();
+var selectedLayer = new L.layerGroup();
+var editableLayers = new L.FeatureGroup();
+
+
+var map = new L.map('map', {
+  layers: [osm,pointsLayer],
+  center: new L.LatLng(37,-119),
+  zoom: 6,
+  maxBounds: [[90,-180], [-90, 180]]
+});
+
+var mapHistory = new L.HistoryControl({
+	maxMovesToave: 5
+}).addTo(map);
+
+
+//asynchronous
+window.onclick = function(event) {
+	if (!event.target.matches('.dropbtn')) {
+
+		var dropdowns = document.getElementsByClassName("dropdown-content");
+		var i;
+		for (i = 0; i < dropdowns.length; i++) {
+			var openDropdown = dropdowns[i];
+			if (openDropdown.classList.contains('show')) {
+				openDropdown.classList.remove('show');
+			}
+		}
+  	}
+}
+
+$(document).ready(function () {
+	$('.group').hide();
+	$('#option1').show();
+	$('#selectMe').change(function () {
+		$('.group').hide();
+		$('#'+$(this).val()).show();
+	}) 
+});
+
+$(document).on('click',function () {
+	//when district checkbox changes
+	$('input[type=checkbox]').change(function(){
+		curr = $(this).attr('name');
+		if(this.checked) {
+			updatePropSymbols(curr, locAreas, 'a');
+		}
+		else {
+			updatePropSymbols(curr, locAreas, 'r');
+		}
+	});
+});
+
+
+//get data
+$.getJSON('incidentsData.json')
+.done(function(data) {
+  var info = processData(data);
+  createPropSymbols(info.locations, info.details);
+})
+.fail(function() { alert('There has been a problem loading the data.')});
+
+//
+function processData(data) {
+	for (var i = 0; i < data["data"].length; i++)  {
+
+		details.push([
+			data["data"][i][8], 
+			data["data"][i][9],
+			data["data"][i][10],
+			data["data"][i][11],
+			data["data"][i][12],
+			data["data"][i][13],
+			data["data"][i][14],
+			data["data"][i][15],
+			data["data"][i][16],
+			data["data"][i][17],
+			data["data"][i][18],
+			data["data"][i][24]]);
+		locations.push([parseFloat(data["data"][i][18]),parseFloat(data["data"][i][17])]);
+		locAreas.push([[parseFloat(data["data"][i][18]),parseFloat(data["data"][i][17])], data["data"][i][14]]);
+		if($.inArray(data["data"][i][14], areas) == -1) {
+			areas.push(data["data"][i][14]);
+		}
+	}
+	return {
+		details : details,
+		locations : locations,
+		areas : areas,
+		locAreas : locAreas
+	}
+}
+
+//
+function createPropSymbols(locations, details) {
+	for(var i = 0; i < locations.length/1000; i++) {
+		
+		var latlng = new L.latLng(locations[i]);
+
+		var marker = L.circleMarker(latlng, {
+			radius: 4,
+			fillColor: '#708598',
+			color: '#537898',
+			weight: 0.8, 
+			fillOpacity: 1,
+			incidentnum: details[i][0],
+			category: details[i][1],
+			desc: details[i][2],
+			weekday: details[i][3],
+			date: details[i][4],
+			time: details[i][5],
+			district: details[i][6],
+			resolution: details[i][7],
+			address: details[i][8],
+			latlong: details[i][9]
+        }).on({
+          mouseover: function(e) {
+            this.openPopup();
+            this.setStyle({color: 'yellow'});
+          },
+          mouseout: function(e) {
+            this.closePopup();
+            this.setStyle({color: '#537898'});
+          },
+          click: function(e) {
+          	if($('#selectMe').val() == 'option1') {
+        		pointClicked(e.sourceTarget.options);
+          	}
+          }
+        }).addTo(pointsLayer);
+	}
+	pointsLayer.addTo(map);
+}
+
+//add/remove district layers
+function updatePropSymbols(district, locAreas, action) {
+	
+	var selected = [];
+	if(action == 'r') {
+		if(map.hasLayer(window[district + 'layer'])) {
+
+			map.removeLayer(window[district + 'layer']);
+		}
+	}
+	if(action == 'a') {
+		if(!map.hasLayer(window[district + 'layer'])) {
+			window[district + 'layer'] = new L.layerGroup;
+			for(var i = 0; i < locAreas.length; i++) {
+				if(district == locAreas[i][1]) {
+					var latlng = new L.latLng(locAreas[i][0]);
+					var marker = L.circleMarker(latlng, {
+						radius: 4,
+						fillColor: '#708598',
+						color: '#537898',
+						weight: 0.5, 
+						fillOpacity: 0.6,
+						incidentnum: details[i][0],
+						category: details[i][1],
+						desc: details[i][2],
+						weekday: details[i][3],
+						date: details[i][4],
+						time: details[i][5],
+						district: details[i][6],
+						resolution: details[i][7],
+						address: details[i][8],
+						latlong: details[i][9]
+			        }).addTo(window[district + 'layer']);
+				}
+			}
+			window[district + 'layer'].addTo(map);
+		}
+		
+	}	
+}
+
+
+function selectByUser(details, locations) {
+    map.addLayer(editableLayers);   
+
+    var options = {
+        position: 'topleft',
+        collapsed: false, 
+        edit: {
+            featureGroup: editableLayers,
+            poly: {
+                allowIntersection: false
+            }
+        },
+        draw: {
+            polygon: {
+                allowIntersection: false,
+                showArea: true
+            }
+        }
+    };
+
+    var drawControl = new L.Control.Draw(options);
+    	map.addControl(drawControl);
+
+	    map.on(L.Draw.Event.CREATED, function (e) {
+	        var layer = e.layer;
+	        var type = e.layerType;
+
+		    if (type === 'circle') {
+		        var theCenterPt = layer.getLatLng();
+		        var center = [theCenterPt.lng,theCenterPt.lat]; 
+		        var theRadius = layer.getRadius();
+		        editableLayers.addLayer(layer);
+
+		        // Turf Circle
+		        var options = {steps: 64, units: 'meters'};  //Change steps to 4 to see what it does.
+		        var turfCircle = turf.circle(center, theRadius, options);
+		        var NewTurfCircle = new L.GeoJSON(turfCircle, {color:"black"}).addTo(map);
+
+		        //Turf Buffer
+		        var thepoint = turf.point(center);
+		        var buffered = turf.buffer(thepoint, theRadius, {units: 'meters'});
+		        var NewTurfBuffer = new L.GeoJSON(buffered, {color:"red"}).addTo(map);
+
+				//check if points are in intersection
+				for(var i = 0; i < details.length; i++) {
+					var intersection = turf.inside(turf.point([details[i][9],details[i][10]]), turfCircle);
+					if (intersection) {
+						var incidentid = details[i][0]
+						var crime = details[i][2];
+						var entry = document.createElement('li');
+						entry.appendChild(document.createTextNode(incidentid));
+						entry.appendChild(document.createTextNode(crime));
+						listCrimes.appendChild(entry);
+					} 
+					else {
+
+					}    
+				}
+		    }
+		});
+    //}
+    
+    
+}
+
+// zoom functions
+function zoomToExtent() {
+	var bounds = L.latLngBounds(locations);
+	map.fitBounds(bounds);
+}
+
+function zoomToPan() {
+	map.panTo([0,0]);
+	map.setZoom(2);
+}
+
+
+//dropdown menu functions
+function ddOption(option) {
+
+	if(option.value == 'option1') {
+		// if(map.hasLayer(editableLayers)){
+		//     editableLayers.eachLayer(
+		//         function(l){
+		//             editableLayers.removeLayer(l);
+		//     });
+		// }  
+		// if(drawControl != undefined) {
+		//     map.removeControl(drawControl);
+		// }		
+		// //map.removeLayer(editableLayers);
+		// map.removeLayer
+		map.eachLayer(function (layer) {
+		    map.removeLayer(layer);
+		});
+		map.addLayer(osm);
+		map.addLayer(pointsLayer);
+	}
+
+	if(option.value == 'option2') {
+		// map.removeLayer(pointsLayer);
+		// if(map.hasLayer(editableLayers)){
+		//     editableLayers.eachLayer(
+		//         function(l){
+		//             editableLayers.removeLayer(l);
+		//     });
+		// }
+		// if(map.drawControl != undefined) {
+		//     map.removeControl(drawControl);
+		// }
+		map.eachLayer(function (layer) {
+		    map.removeLayer(layer);
+		});
+		map.addLayer(osm);
+
+		if($("div1").length === 0) {
+			var div = document.createElement('div1');
+
+			for(var i = 0; i < areas.length; i++) {
+				var checkbox = document.createElement('input');
+
+				checkbox.type = "checkbox";
+				checkbox.name = areas[i];
+				checkbox.value = areas[i];
+				checkbox.id = "cbid";
+				checkbox.checked =false;
+
+				var label = document.createElement('cblabel')
+				label.htmlFor = "cbid";
+				label.appendChild(document.createTextNode(areas[i]));
+				cbcrimes.appendChild(div);
+				div.appendChild(checkbox);
+				div.appendChild(label);
+				div.appendChild(document.createElement("br"));
+			}
+		}
+		else {
+			$('input[type=checkbox]').each(function () {
+			    this.checked = false;
+			});
+		}
+	}
+
+	if(option.value == 'option3') {
+		map.eachLayer(function (layer) {
+		    map.removeLayer(layer);
+		});
+		osm.addTo(map);
+		selectByUser(details,locations);
+	}
+}
+
+function pointClicked(detail) {
+	document.getElementById("txtIncidentNum").textContent = ' ' + detail.incidentnum;
+	document.getElementById("txtCategory").textContent = ' ' + detail.category;
+	document.getElementById("txtDesc").textContent = ' ' + detail.desc;
+	document.getElementById("txtWeekday").textContent = ' ' + detail.weekday;
+	document.getElementById("txtDate").textContent = ' ' + detail.date;
+	document.getElementById("txtTime").textContent = ' ' + detail.time;
+	document.getElementById("txtDistrict").textContent = ' ' + detail.district;
+	document.getElementById("txtResolution").textContent = ' ' + detail.resolution;
+	document.getElementById("txtAddress").textContent = ' ' + detail.address;
+	document.getElementById("txtLatLong").textContent = ' ' + detail.latlong;
+
+}
+
+</script>
+</body>
+</html>

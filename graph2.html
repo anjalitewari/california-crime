@@ -1,0 +1,50 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<script>
+window.onload = function() {
+
+var dataPoints = [];
+
+var chart = new CanvasJS.Chart("chartContainer", {
+	animationEnabled: true,
+	theme: "light2",
+	title: {
+		text: "Crime Data by Weekday"
+	},
+	axisY: {
+		title: "# of crimes",
+		titleFontSize: 24
+	},
+	axisX:{
+        title: "Weekday",
+        valueFormatString: "DDDD"  // move comma to change formatting
+     },
+	data: [{
+		type: "column",
+		yValueFormatString: "##,###",
+		dataPoints: dataPoints
+	}]
+});
+
+function addData(data) {
+	for (var i = 0; i < data[0].length; i++) {
+		dataPoints.push({
+			x: new Date(data[0][i]['time']),
+			y: Number(data[0][i]['y'])
+		});
+	}
+	chart.render();
+}
+
+$.getJSON("graphfiles/crimesperday.json", addData);
+
+}
+</script>
+</head>
+<body>
+<div id="chartContainer" style="height: 300px; width: 100%;"></div>
+<script src="https://canvasjs.com/assets/script/jquery-1.11.1.min.js"></script>
+<script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
+</body>
+</html>
