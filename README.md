@@ -7,7 +7,7 @@ The map has three options to visualize data:
 2) By area allows you to choose the district you want to see crime instances in and displays them.
 3) By drawing allows you to draw a circle on the map and displays all occurrences of crime inside the circle.
 
--Graph based representation:
+- Graph based representation:
 1) Graph1 displays number of crimes by hour of the day and allows you to choose day of the week.
 2) Graph2 displays number of crimes by weekday.
 3) Graph3 displays number of crimes by hour of the day only.
